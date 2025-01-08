@@ -11,7 +11,9 @@ connected must also support this for this to work.
 ## Getting started
 
 Clone:
-`git clone https:`
+```
+git clone https://github.com/cweave72/tuntap-serial.git
+```
 
 Run uv:
 ```bash
@@ -55,15 +57,25 @@ Note we need to run the tool as root since we are using the pytun package.
 ## Notes on manually creating the TAP device
 
 Creating a tuntap device:
-`sudo ip tuntap add mode tap tap0`
+```
+sudo ip tuntap add mode tap tap0
+```
+
 Bring it up:
-`sudo ip link set dev tap0 up`
+```
+sudo ip link set dev tap0 up
+```
+
 Assign IP (example addr shown):
-`sudo ip addr add 192.168.40.1/24 dev tap0`
+```
+sudo ip addr add 192.168.40.1/24 dev tap0
+```
 
 Note: This might bring down your internet connection if your DNS is set to your
 local gateway (error is DNS_PROBE_FINISHED_BAD_CONFIG). Fix by adding
 nameservers to /etc/netplan (1.1.1.1, 1.0.0.1)
 
 Removing the tap interface:
-`sudo tuntap del dev tap0`
+```
+sudo tuntap del dev tap0
+```
