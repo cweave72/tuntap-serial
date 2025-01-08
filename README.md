@@ -54,6 +54,24 @@ Run:
 
 Note we need to run the tool as root since we are using the pytun package.
 
+Verify the interface is up:
+```
+$ ip addr show tap0
+143: tap0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UNKNOWN group default qlen 1000
+    link/ether 92:67:a2:90:c1:10 brd ff:ff:ff:ff:ff:ff
+    inet 192.0.2.2/24 brd 192.0.2.255 scope global tap0
+       valid_lft forever preferred_lft forever
+    inet 169.254.214.81/16 brd 169.254.255.255 scope global noprefixroute tap0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::5310:16ef:6c45:12c8/64 scope link 
+       valid_lft forever preferred_lft forever
+```
+
+You should now be able to communicate to a hardware device connected:
+
+![Hardware](images/hwsetup.png)
+
+
 ## Notes on manually creating the TAP device
 
 Creating a tuntap device:
