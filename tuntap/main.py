@@ -4,6 +4,7 @@ import signal
 import logging
 import select
 import click
+import random
 from serial import Serial
 from threading import Thread, Event
 from pytun import TapTunnel
@@ -11,8 +12,10 @@ from scapy.layers.l2 import Ether
 from rich.logging import RichHandler
 from rich import inspect
 
+import tuntap.slip as slip
 import tuntap.cobs as cobs
-from tuntap.cobs import Deframer
+from tuntap.cobs import Deframer as CobsDeframer
+from tuntap.slip import Deframer as SlipDeframer
 
 logger = logging.getLogger()
 
@@ -31,7 +34,6 @@ threads = []
 
 def signal_handler(sig, frame):
     for t in threads:
-        logger.debug(f"Stopping {t.__class__}")
         t.stop()
 
 
@@ -87,7 +89,12 @@ class SerialToEth(StoppableThread):
         self.tun = tun
         self.ser = ser
         if deframer_type == "cobs":
-            self.deframer = Deframer().process
+            self.deframer = CobsDeframer().process
+        elif deframer_type == "slip":
+            self.deframer = SlipDeframer().process
+        else:
+            logger.error(f"Unsupported deframer: {deframer_type}")
+            sys.exit(1)
 
     def run(self):
         while True:
@@ -103,6 +110,10 @@ class SerialToEth(StoppableThread):
             # logger.debug(f"raw_bytes={bytes2hex(raw_bytes)}")
             msg = self.deframer(raw_bytes)
             if msg is not None:
+                if len(msg) == 0:
+                    logger.warning("Zero length message received.")
+                    continue
+
                 pkt = Ether(msg)
 
                 logger.debug(
@@ -156,12 +167,14 @@ class EthToSerial(StoppableThread):
 @click.group(context_settings=CONTEXT_SETTINGS, invoke_without_command=True)
 @click.option("--loglevel", default="info", help="Debug logging level.")
 @click.option("--logtree", is_flag=True, help="Show logging tree and exit.")
+@click.option("--cobslog", is_flag=True, help="Show cobs logging.")
+@click.option("--sliplog", is_flag=True, help="Show slip logging.")
 @click.option(
     "-d", "--debug", is_flag=True, help="Shortcut for --loglevel=debug."
 )
 @click.pass_context
 def cli(ctx, **kwargs):
-    """CLI receiving raw ethernet frames from tuntap interface."""
+    """CLI providing network interface over serial using a tap interface."""
     global threads
 
     params = get_params(**kwargs)
@@ -177,7 +190,9 @@ def cli(ctx, **kwargs):
     logger.addHandler(ch)
 
     cobs_logger = logging.getLogger("tuntap.cobs")
-    cobs_logger.propagate = False
+    slip_logger = logging.getLogger("tuntap.slip")
+    cobs_logger.propagate = params.cobslog
+    slip_logger.propagate = params.sliplog
 
     if params.logtree:
         import logging_tree
@@ -192,9 +207,12 @@ def cli(ctx, **kwargs):
 @click.option(
     "--cobs",
     is_flag=True,
-    default=True,
-    show_default=True,
     help="Use COBS enccoding over serial port.",
+)
+@click.option(
+    "--slip",
+    is_flag=True,
+    help="Use SLIP enccoding over serial port.",
 )
 @click.pass_context
 def tap(ctx, **kwargs):
@@ -227,11 +245,15 @@ def tap(ctx, **kwargs):
             return
 
     framer = None
-    if params.cobs:
+    if params.slip:
+        framer = slip.framer
+        deframer_type = "slip"
+    elif params.cobs:
         framer = cobs_frame
+        deframer_type = "cobs"
 
     tx = EthToSerial(tun, ser, framer)
-    rx = SerialToEth(tun, ser, "cobs")
+    rx = SerialToEth(tun, ser, deframer_type)
 
     threads.append(tx)
     threads.append(rx)
@@ -254,6 +276,11 @@ def tap(ctx, **kwargs):
     "--cobs", is_flag=True, help="Use COBS enccoding over serial port."
 )
 @click.option(
+    "--slip",
+    is_flag=True,
+    help="Use COBS enccoding over serial port.",
+)
+@click.option(
     "-n", "--num", type=int, default=16, help="Number of bytes to send."
 )
 @click.option(
@@ -272,14 +299,31 @@ def test(ctx, **kwargs):
         logger.error(f"Error opening serial port {params.tty}: {str(e)}")
         return
 
-    for k in range(params.iter):
-        data = bytearray([x % 256 for x in range(params.num)])
+    if params.cobs:
+        for k in range(params.iter):
+            data = bytearray([x % 256 for x in range(params.num)])
 
-        if params.cobs:
             data = cobs_frame(data)
             logger.debug(f"Encoded={bytes2hex(data)}")
 
-        ser.write(data)
+            ser.write(data)
+    else:
+        deframer = SlipDeframer()
+        for k in range(100):
+            data = [random.randint(0, 255) for r in range(1500)]
+            txdata = slip.framer(data)
+            rxdata = deframer.process(txdata)
+            if rxdata:
+                for i, (d, r) in enumerate(zip(data, rxdata)):
+                    if d != r:
+                        logger.error(f"[{i}]: 0x{d:02x} != 0x{r:02x}")
+                        logger.error(f"encoded={bytes2hex(txdata)}")
+                        sys.exit(0)
+            else:
+                logger.error(f"Error on decode (iter={k}).")
+            # logger.debug(f"Encoded({len(data)})={bytes2hex(data)}")
+            # ser.write(data)
+
     ser.close()
 
 

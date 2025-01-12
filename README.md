@@ -4,9 +4,11 @@ This tool provides network interface over a standard serial device. This was
 written to test Ethernet over serial interfaces using hardware running the
 Zephyr RTOS.
 
-Currently, this interface uses the Consistent Overhead Byte Stuffing (COBS)
-framing on the serial interface (using \x00 as the frame delimeter).  Hardware
-connected must also support this for this to work.
+This interface supports the following framing methods:
+
+* Consistent Overhead Byte Stuffing (COBS)
+* Serial Line Interface Protocol (SLIP).
+* no framing
 
 ## Getting started
 
@@ -25,8 +27,7 @@ uv sync
 
 Usage:
 ```
-source .venv/bin/activate
-(tuntap-demo) sudo .venv/bin/taptool --help
+$ sudo .venv/bin/taptool --help
 Usage: taptool [OPTIONS] COMMAND [ARGS]...
 
   CLI receiving raw ethernet frames from tuntap interface.
@@ -42,19 +43,34 @@ Commands:
   test  Tests tty data.
 ```
 
-Assumptions:
-Serial device to hardware: `/dev/ttyUSB1`
-IP address to set on the TAP interface: 192.0.2.2
-Note: Hardware device must be on the 192.0.2.0/24 network
-
-Run:
 ```
-(tuntap-demo) sudo .venv/bin/taptool -d tap --tty /dev/ttyUSB1 --ip 192.0.2.2
+$ sudo .venv/bin/taptool tap -h
+Usage: taptool tap [OPTIONS]
+
+  Implements tap device over serial.
+
+Options:
+  --ip TEXT   Device IP address.  [required]
+  --tty TEXT  Serial port to bridge to.
+  --cobs      Use COBS enccoding over serial port.
+  --slip      Use SLIP enccoding over serial port.
+  -h, --help  Show this message and exit.
 ```
 
-Note we need to run the tool as root since we are using the pytun package.
+Example usage:
 
-Verify the interface is up:
+(Assumptions)
+* Serial device to hardware: `/dev/ttyUSB1`
+* IP address to set on the TAP interface: 192.0.2.2
+* Hardware device must be on the 192.0.2.0/24 network
+* SLIP framing
+
+Run (Note we need to run the tool as root since we are using the pytun package):
+```
+sudo .venv/bin/taptool -d tap --tty /dev/ttyUSB1 --ip 192.0.2.2 --slip
+```
+
+Verify the interface is up (from another terminal):
 ```
 $ ip addr show tap0
 143: tap0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UNKNOWN group default qlen 1000
@@ -70,7 +86,6 @@ $ ip addr show tap0
 You should now be able to communicate to a hardware device connected:
 
 ![Hardware](images/hwsetup.png)
-
 
 ## Notes on manually creating the TAP device
 
