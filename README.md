@@ -87,6 +87,30 @@ You should now be able to communicate to a hardware device connected:
 
 ![Hardware](images/hwsetup.png)
 
+## Networking with a QEMU instance
+
+This will allow running the application under QEMU and provide networking with
+the host linux PC.
+
+* We must first set up an emulated serial device and listening socket using a
+`socat` command. This is accomplished via the script `loop-socat.sh` which is
+found either at `deps/tools/net-tools` or wherever you cloned `tuntap-serial`
+mentioned above.
+```
+sudo ./loop-socat.sh
+```
+
+This will create a psuedo terminal and link it to the file `/tmp/slip.dev` which
+is expected by QEMU. For reference, the socat command is shown below:
+```
+socat PTY,link=/tmp/slip.dev UNIX-LISTEN:/tmp/slip.sock
+```
+
+You can then start the `taptool` utility as follows (the `-d` is optional):
+```
+sudo .venv/bin/taptool -d tap --tty /tmp/slip.dev --ip 192.0.2.2 --slip
+```
+
 ## Notes on manually creating the TAP device
 
 Creating a tuntap device:
