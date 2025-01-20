@@ -19,4 +19,4 @@ while [ $STOPPED -eq 0 ]; do
     socat PTY,link=/tmp/slip.dev UNIX-LISTEN:/tmp/slip.sock
 done
 
-echo "Exited socat."
+echo "\nExited socat."

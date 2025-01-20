@@ -5,6 +5,9 @@ import logging
 import select
 import click
 import random
+import time
+import shlex
+import subprocess
 from serial import Serial
 from threading import Thread, Event
 from pytun import TapTunnel
@@ -33,8 +36,22 @@ threads = []
 
 
 def signal_handler(sig, frame):
+    kill_threads()
+
+
+def start_threads():
+    for t in threads:
+        t.start()
+
+
+def kill_threads():
     for t in threads:
         t.stop()
+
+
+def wait_threads():
+    for t in threads:
+        t.join()
 
 
 def get_params(**kwargs):
@@ -102,7 +119,11 @@ class SerialToEth(StoppableThread):
                 logger.debug("Stopping SerialToEth.")
                 return
 
-            raw_bytes = self.ser.read(64)
+            try:
+                raw_bytes = self.ser.read(64)
+            except Exception as e:
+                logger.warning(f"Broken connection: {str(e)}")
+                return
 
             if len(raw_bytes) == 0:
                 continue
@@ -161,7 +182,11 @@ class EthToSerial(StoppableThread):
                     # logger.debug(f"Encoded={bytes2hex(data)}")
                 else:
                     data = buf
-                self.ser.write(data)
+                try:
+                    self.ser.write(data)
+                except Exception as e:
+                    logger.warning(f"Broken connection: {str(e)}")
+                    return
 
 
 @click.group(context_settings=CONTEXT_SETTINGS, invoke_without_command=True)
@@ -258,10 +283,8 @@ def tap(ctx, **kwargs):
     threads.append(tx)
     threads.append(rx)
 
-    tx.start()
-    rx.start()
-    tx.join()
-    rx.join()
+    start_threads()
+    wait_threads()
 
     # Cleanup after thread ends.
     tun.close()
